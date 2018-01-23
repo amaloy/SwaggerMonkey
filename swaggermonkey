@@ -7,12 +7,14 @@
 import json
 import os
 import random
-import urllib2
-
+import re
+import requests
 
 SM_SWAGGER_FILE = 'SM_SWAGGER_FILE'
 SM_TARGET_HOST = 'SM_TARGET_HOST'
 SM_TARGET_PORT = 'SM_TARGET_PORT'
+
+SM_FORCE_SCHEME = 'SM_FORCE_SCHEME'
 
 
 def main():
@@ -25,20 +27,24 @@ def main():
         exit(1)
 
     if sm_swagger_file.startswith('http'):
-        response = urllib2.urlopen(sm_swagger_file)
-        swagger_json = json.loads(response.read())
-        response.close()
+        r = requests.get(sm_swagger_file)
+        sm_swagger_file_content = r.text
+        r.close()
     else:
-        file = open(sm_swagger_file, 'r')
-        swagger_json = json.loads(file.read())
-        file.close()
+        f = open(sm_swagger_file, 'r')
+        sm_swagger_file_content = f.read()
+        f.close()
+    swagger_json = json.loads(json_clean_trailing_commas(sm_swagger_file_content))
+    del sm_swagger_file_content
 
     if 'basePath' in swagger_json:
         base_path = swagger_json['basePath']
     else:
         base_path = ''
 
-    if 'schemes' in swagger_json:
+    if SM_FORCE_SCHEME in os.environ:
+        scheme = os.environ[SM_FORCE_SCHEME]
+    elif 'schemes' in swagger_json:
         scheme = swagger_json['schemes'][0]
     else:
         scheme = 'http'
@@ -49,9 +55,9 @@ def main():
 
     while True:
         random_root_get_path = root_get_paths[random.randint(0, len(root_get_paths) - 1)]
-        response = urllib2.urlopen(base_url + random_root_get_path)
-        # print response.read()
-        response.close()
+        r = requests.get(base_url + random_root_get_path)
+        # print response.text
+        r.close()
         # time.sleep(.5)
 
 
@@ -86,7 +92,13 @@ def is_argless_path(path):
 
 
 def has_get_method(path, swagger_json):
-    return swagger_json['paths'][path]['get'] is not None
+    return 'get' in swagger_json['paths'][path]
+
+
+def json_clean_trailing_commas(json_content):
+    json_content = re.sub(",[ \t\r\n]+}", "}", json_content)
+    json_content = re.sub(",[ \t\r\n]+\]", "]", json_content)
+    return json_content
 
 
 if __name__ == '__main__':

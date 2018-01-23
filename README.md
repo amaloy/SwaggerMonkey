@@ -7,6 +7,10 @@ These environment variables must be defined:
 * `SM_TARGET_HOST`
 * `SM_TARGET_PORT`
 
+Optional environment variables:
+
+* `SM_FORCE_SCHEME`
+
 Direct execution:
 
 `SM_SWAGGER_FILE=http://192.168.1.2/swagger.json SM_TARGET_HOST=192.168.1.2 SM_TARGET_PORT=8080 ./swaggermonkey`
