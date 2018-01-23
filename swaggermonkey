@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+# python 2.7
+#
+# Provides service load by making random calls based on a Swagger JSON file.
+#
+
+import json
+import os
+import random
+import urllib2
+
+
+SM_SWAGGER_FILE = 'SM_SWAGGER_FILE'
+SM_TARGET_HOST = 'SM_TARGET_HOST'
+SM_TARGET_PORT = 'SM_TARGET_PORT'
+
+
+def main():
+    try:
+        sm_swagger_file = os.environ[SM_SWAGGER_FILE]
+        sm_target_host = os.environ[SM_TARGET_HOST]
+        sm_target_port = os.environ[SM_TARGET_PORT]
+    except KeyError:
+        print 'These environment variables must be defined:', SM_SWAGGER_FILE, SM_TARGET_HOST, SM_TARGET_PORT
+        exit(1)
+
+    if sm_swagger_file.startswith('http'):
+        response = urllib2.urlopen(sm_swagger_file)
+        swagger_json = json.loads(response.read())
+        response.close()
+    else:
+        file = open(sm_swagger_file, 'r')
+        swagger_json = json.loads(file.read())
+        file.close()
+
+    if 'basePath' in swagger_json:
+        base_path = swagger_json['basePath']
+    else:
+        base_path = ''
+
+    if 'schemes' in swagger_json:
+        scheme = swagger_json['schemes'][0]
+    else:
+        scheme = 'http'
+
+    base_url = scheme + '://' + sm_target_host + ':' + sm_target_port + base_path
+
+    root_get_paths = collect_root_get_paths(swagger_json)
+
+    while True:
+        random_root_get_path = root_get_paths[random.randint(0, len(root_get_paths) - 1)]
+        response = urllib2.urlopen(base_url + random_root_get_path)
+        # print response.read()
+        response.close()
+        # time.sleep(.5)
+
+
+# []
+def collect_root_get_paths(swagger_json):
+    paths = swagger_json['paths']
+    result = []
+    for path in paths:
+        if is_argless_path(path):
+            if has_get_method(path, swagger_json):
+                result.append(path)
+    return result
+
+
+# TODO: greater diversity by calling paths with args (e.g. resource ids)
+# { root_path : sub_path }
+# def build_root_sub_get_path_map(swagger_json, root_get_paths):
+#     paths = swagger_json['paths']
+#     result = {}
+#     for path in paths:
+#         if not is_argless_path(path):
+#             if has_get_method(path, swagger_json):
+#                 # find matching root path (if any)
+#                 for root_path in root_get_paths:
+#                     if re.match('^(' + root_path + '){1}[/]{0,1}[{][0-9a-zA-Z]+[}]$', path):
+#                         result[root_path] = path
+#     return result
+
+
+def is_argless_path(path):
+    return path.rstrip().find('{') == -1
+
+
+def has_get_method(path, swagger_json):
+    return swagger_json['paths'][path]['get'] is not None
+
+
+if __name__ == '__main__':
+    main()
