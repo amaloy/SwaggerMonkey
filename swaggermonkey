@@ -21,25 +21,19 @@ SM_ID_FIELDS = 'SM_ID_FIELDS'
 
 
 def main():
-    try:
-        sm_swagger_file = os.environ[SM_SWAGGER_FILE]
-        sm_target_host = os.environ[SM_TARGET_HOST]
-        sm_target_port = os.environ[SM_TARGET_PORT]
-    except KeyError:
-        print 'These environment variables must be defined:', SM_SWAGGER_FILE, SM_TARGET_HOST, SM_TARGET_PORT
-        exit(1)
+    env_config = read_env_config()
 
-    targets_hosts = sm_target_host.split(',')
-    id_fields = get_id_fields()
+    targets_hosts = env_config[SM_TARGET_HOST].split(',')
+    id_fields = get_id_fields(env_config)
 
-    swagger_json = get_swagger_json(sm_swagger_file)
+    swagger_json = get_swagger_json(env_config[SM_SWAGGER_FILE])
     base_path = get_base_path(swagger_json)
-    scheme = get_scheme(swagger_json)
-    base_url_format = scheme + '://{0}:' + sm_target_port + base_path
+    scheme = get_scheme(swagger_json, env_config)
+    base_url_format = scheme + '://{0}:' + env_config[SM_TARGET_PORT] + base_path
 
     argless_paths = collect_argless_get_paths(swagger_json)
-    if SM_INCLUDE_PATHS in os.environ:
-        for path in os.environ[SM_INCLUDE_PATHS].split(','):
+    if SM_INCLUDE_PATHS in env_config:
+        for path in env_config[SM_INCLUDE_PATHS].split(','):
             argless_paths.append(path)
 
     having_one_arg_match = collect_having_one_arg_match(swagger_json, argless_paths)
@@ -70,9 +64,33 @@ def main():
                     r.close()
 
 
-def get_id_fields():
-    if SM_ID_FIELDS in os.environ:
-        id_fields = os.environ[SM_ID_FIELDS].split(',')
+# {string : string}
+def read_env_config():
+    env_config = {}
+    try:
+        env_config[SM_SWAGGER_FILE] = os.environ[SM_SWAGGER_FILE]
+        env_config[SM_TARGET_HOST] = os.environ[SM_TARGET_HOST]
+        env_config[SM_TARGET_PORT] = os.environ[SM_TARGET_PORT]
+    except KeyError:
+        print 'These environment variables must be defined:', SM_SWAGGER_FILE, SM_TARGET_HOST, SM_TARGET_PORT
+        exit(1)
+
+    conditional = [SM_SCHEME, SM_INCLUDE_PATHS, SM_ID_FIELDS]
+    for k in conditional:
+        if k in os.environ:
+            env_config[k] = os.environ[k]
+
+    # Print env config
+    print 'Environment Config:'
+    for k in env_config:
+        print '*', k, '=', env_config[k]
+
+    return env_config
+
+
+def get_id_fields(env_config):
+    if SM_ID_FIELDS in env_config:
+        id_fields = env_config[SM_ID_FIELDS].split(',')
     else:
         id_fields = ['id']
     return id_fields
@@ -95,9 +113,9 @@ def get_base_path(swagger_json):
     return swagger_json['basePath'] if 'basePath' in swagger_json else ''
 
 
-def get_scheme(swagger_json):
-    if SM_SCHEME in os.environ:
-        scheme = os.environ[SM_SCHEME]
+def get_scheme(swagger_json, env_config):
+    if SM_SCHEME in env_config:
+        scheme = env_config[SM_SCHEME]
     elif 'schemes' in swagger_json:
         scheme = swagger_json['schemes'][0]
     else:
